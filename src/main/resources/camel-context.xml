@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="
+           http://www.springframework.org/schema/beans
+           http://www.springframework.org/schema/beans/spring-beans.xsd
+           http://camel.apache.org/schema/spring
+           http://camel.apache.org/schema/spring/camel-spring.xsd">
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════════════╗
+    ║  threadPoolProfile  vs  threadPool — Quick Reference                ║
+    ╠══════════════════════════════╦═══════════════════════════════════════╣
+    ║  threadPoolProfile           ║  threadPool                          ║
+    ╠══════════════════════════════╬═══════════════════════════════════════╣
+    ║ Acts as a TEMPLATE           ║ Creates ONE concrete ExecutorService  ║
+    ║ Each route/DSL step that     ║ instance registered in Camel          ║
+    ║ references it gets its OWN   ║ registry.  All references to it      ║
+    ║ pool created from the same   ║ SHARE the same pool.                 ║
+    ║ settings.                    ║                                       ║
+    ╠══════════════════════════════╬═══════════════════════════════════════╣
+    ║ Reference in Java DSL:       ║ Reference in Java DSL:               ║
+    ║ .executorServiceRef("id")    ║ .executorServiceRef("id")            ║
+    ║ Camel checks registry first; ║ Resolves directly as ExecutorService  ║
+    ║ if not found, checks profiles║ from Camel registry.                 ║
+    ║ and creates a new pool.      ║                                       ║
+    ╠══════════════════════════════╬═══════════════════════════════════════╣
+    ║ USE WHEN: each consumer      ║ USE WHEN: you want all threads()     ║
+    ║ route needs its own isolated ║ steps to share one bounded pool.     ║
+    ║ pool with the same settings. ║                                       ║
+    ╚══════════════════════════════╩═══════════════════════════════════════╝
+    -->
+
+    <camelContext id="camelContext" xmlns="http://camel.apache.org/schema/spring">
+
+        <!-- ─────────────────────────────────────────────────────────────
+             APPROACH A  (Recommended) — threadPoolProfile
+             A named template. Camel creates a new isolated thread pool
+             for each route/DSL step that references this profile id.
+             Reference in route:  .executorServiceRef("kafkaProcessingExecutor")
+        ──────────────────────────────────────────────────────────────── -->
+        <threadPoolProfile id="kafkaProcessingExecutor"
+                           defaultProfile="false"
+                           threadName="kafka-proc"
+                           poolSize="5"
+                           maxPoolSize="20"
+                           maxQueueSize="500"
+                           keepAliveTime="60"
+                           rejectedPolicy="CallerRuns"/>
+
+        <!-- ─────────────────────────────────────────────────────────────
+             APPROACH B  (Alternative) — threadPool
+             A concrete shared instance. All references share ONE pool.
+             Reference in route:  .executorServiceRef("kafkaSharedPool")
+        ──────────────────────────────────────────────────────────────── -->
+        <!--
+        <threadPool id="kafkaSharedPool"
+                    threadName="kafka-shared"
+                    poolSize="5"
+                    maxPoolSize="20"
+                    maxQueueSize="500"
+                    keepAliveTime="60" />
+        -->
+
+        <!-- Wire in Java DSL RouteBuilder beans -->
+        <routeBuilder ref="kafkaConsumerRoute"/>
+        <routeBuilder ref="dlqRoute"/>
+
+    </camelContext>
+
+</beans>
+
+
